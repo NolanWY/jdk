@@ -1,0 +1,1 @@
+`nmethod`的状态有：`not_installed, in_use, not_entrant, zombie, unloaded`
