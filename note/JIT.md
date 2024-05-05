@@ -137,3 +137,19 @@ int Compilation::compile_java_method()
                 void LIR_Assembler::emit_lir_list(LIR_List* list) 
                     virtual void emit_code(LIR_Assembler* masm)
 ```
+
+## C2编译器
+
+`CompileBroker::invoke_compiler_on_method`方法调用C2编译器的`compile_method`方法进行编译，该方法通过构造`Compile`对象完成编译。
+
+C2的编译流程可通过查看`Phase::PhaseTraceId`获得：
+
+1. 根据字节码生成理想图
+2. 机器无关优化
+3. 指令选择
+4. 指令调度与全局代码提出
+5. 寄存器分配
+6. 移除空基本块
+7. 窥孔优化
+8. 机器代码生成
+9. 代码安装
