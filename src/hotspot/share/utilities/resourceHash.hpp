@@ -175,5 +175,51 @@ class ResourceHashtable : public ResourceObj {
   }
 };
 
+template<
+        typename E,
+        unsigned (*HASH)  (E const&)           = primitive_hash<E>,
+        bool     (*EQUALS)(E const&, E const&) = primitive_equals<E>,
+        unsigned SIZE = 256,
+        ResourceObj::allocation_type ALLOC_TYPE = ResourceObj::RESOURCE_AREA,
+        MEMFLAGS MEM_TYPE = mtInternal
+        >
+class ResourceHashSet : public ResourceObj {
+ private:
+  ResourceHashtable<E, bool, HASH, EQUALS, SIZE, ALLOC_TYPE, MEM_TYPE> _hash_table;
+
+  template<class ITER>
+  class ProxyIter : public Closure {
+   private:
+    ITER *_iter;
+
+   public:
+    ProxyIter(ITER *iter) : _iter(iter) {}
+    bool do_entry(E const& element, bool const& ignore) {
+      return _iter->do_entry(element);
+    }
+  };
+
+  public:
+
+  bool contains(E const& element) const {
+    return _hash_table.contains(element);
+  }
+
+  bool put(E const& element) {
+    return _hash_table.put(element, true);
+  }
+
+  bool remove(E const& element) {
+    return _hash_table.remove(element);
+  }
+
+  // ITER contains bool do_entry(E const&), which will be
+  // called for each entry in the set.  If do_entry() returns false,
+  // the iteration is cancelled.
+  template<class ITER>
+  void iterate(ITER* iter) const {
+    return _hash_table.iterate(ProxyIter<ITER>(iter));
+  }
+};
 
 #endif // SHARE_VM_UTILITIES_RESOURCEHASH_HPP

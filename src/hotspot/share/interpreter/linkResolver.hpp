@@ -189,6 +189,8 @@ class LinkInfo : public StackObj {
   void         print()  PRODUCT_RETURN;
 };
 
+class ClinitAnalysis;
+
 // Link information for getfield/putfield & getstatic/putstatic bytecodes
 // is represented using a fieldDescriptor.
 
@@ -198,6 +200,7 @@ class LinkInfo : public StackObj {
 class LinkResolver: AllStatic {
   friend class klassVtable;
   friend class klassItable;
+  friend class ClinitAnalysis;
 
  private:
 
