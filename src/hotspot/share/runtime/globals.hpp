@@ -2655,7 +2655,10 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
           "Start flight recording with options"))                           \
                                                                             \
   experimental(bool, UseFastUnorderedTimeStamps, false,                     \
-          "Use platform unstable time where supported for timestamps only")
+          "Use platform unstable time where supported for timestamps only") \
+                                                                            \
+  develop(ccstr, JitValidatorLogLevel, "off",                               \
+          "JIT code validator log level")
 
 #define VM_FLAGS(develop,                                                   \
                  develop_pd,                                                \
