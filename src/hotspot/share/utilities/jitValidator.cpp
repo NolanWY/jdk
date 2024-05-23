@@ -75,8 +75,8 @@ void JitValidator::analyze_nmethod(nmethod *nm) {
 
       // Only positive value can be an address
       if (result.type == OperandValue::UNSIGNED || result.type == OperandValue::SIGNED && result.value.s > 0) {
-        // Filter out small value
-        if (result.value.u >= (1 << 20)) {
+        // Filter out small and large value
+        if (result.value.u >= (1 << 20) && result.value.u < 0x800000000000) {
           if (_log_level == DETAIL) {
             print_instruction(&instruction, operands, runtimeAddress);
           }
