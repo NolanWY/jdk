@@ -2657,7 +2657,7 @@ define_pd_global(uint64_t,MaxRAM,                    1ULL*G);
   experimental(bool, UseFastUnorderedTimeStamps, false,                     \
           "Use platform unstable time where supported for timestamps only") \
                                                                             \
-  develop(ccstr, JitValidatorLogLevel, "off",                               \
+  experimental(ccstr, JitValidatorLogLevel, "off",                          \
           "JIT code validator log level")
 
 #define VM_FLAGS(develop,                                                   \

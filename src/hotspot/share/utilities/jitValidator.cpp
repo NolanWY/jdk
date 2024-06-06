@@ -2,6 +2,7 @@
 
 #include "code/codeCache.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "oops/oop.inline.hpp"
 #include "utilities/Zydis.h"
 #include "utilities/debug.hpp"
 #include "utilities/exceptions.hpp"
@@ -17,9 +18,9 @@ JitValidator::JitValidator()
   ZydisFormatterInit(&_formatter, ZYDIS_FORMATTER_STYLE_ATT);
 
   for (int i = 0; i < mt_number_of_types; i++) {
-    _address_count[i] = 0;
+    _recognizable_address[i] = new GrowableArray<address>();
   }
-  _unrecognizable_address_count = 0;
+  _unrecognizable_address = new GrowableArray<address>();
   _nmethod_count = 0;
 
   if (strcmp(JitValidatorLogLevel, "off") == 0) {
@@ -161,11 +162,11 @@ void JitValidator::handle_value(OperandValue value) {
   MEMFLAGS flag;
   if (_address_locator.get_flag(p, flag)) {
     JIT_VALIDATOR_DETAIL_LOG(" : %p has memory flag \"%s\"\n", p, NMTUtil::flag_to_name(flag));
-    _address_count[flag]++;
+    _recognizable_address[flag]->append_if_missing(p);
     // TODO: validate address
   } else {
     JIT_VALIDATOR_DETAIL_LOG(" : Failed to get memory flag of %p\n", p);
-    _unrecognizable_address_count++;
+    _unrecognizable_address->append_if_missing(p);
   }
 }
 
@@ -177,14 +178,30 @@ void JitValidator::print_statistics() {
   tty->print("\n=====================================================\n");
   tty->print("JIT validator statistics:\n");
   for (int i = 0; i < mt_number_of_types; i++) {
-    if (_address_count[i] != 0) {
-      tty->print("%s : %d\n", NMTUtil::flag_to_name(NMTUtil::index_to_flag(i)), _address_count[i]);
-      sum += _address_count[i];
+    GrowableArray<address> *addressArray = _recognizable_address[i];
+    if (addressArray->is_nonempty()) {
+      tty->print("%s : %d\n", NMTUtil::flag_to_name(NMTUtil::index_to_flag(i)), addressArray->length());
+      sum += addressArray->length();
     }
   }
-  tty->print("Unrecognizable address : %d\n", _unrecognizable_address_count);
-  sum += _unrecognizable_address_count;
+  tty->print("Unrecognizable address : %d\n", _unrecognizable_address->length());
+  sum += _unrecognizable_address->length();
   tty->print("Total address: %lld\n", sum);
   tty->print("Total nmethod: %d\n", _nmethod_count);
+  tty->print("=====================================================\n");
+
+  tty->print("Java heap address statistics:\n");
+  KlassCounter klassCounter;
+  GrowableArray<address> *heapAddress = _recognizable_address[mtJavaHeap];
+  for (int i = 0; i < heapAddress->length(); i++) {
+    address p = heapAddress->at(i);
+    oop o = (oop) p;
+    if (Universe::heap()->is_oop(o)) {
+      Klass *klass = o->klass();
+      klassCounter.increase_count(klass);
+      JIT_VALIDATOR_DETAIL_LOG("%p : %s\n", p, klass->signature_name());
+    }
+  }
+  klassCounter.print_statistics();
   tty->print("=====================================================\n");
 }

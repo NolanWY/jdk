@@ -6,6 +6,8 @@
 #include "utilities/Zydis.h"
 #include "utilities/exceptions.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "utilities/growableArray.hpp"
+#include "utilities/pair.hpp"
 
 #define JIT_VALIDATOR_DETAIL_LOG(format, ...) \
   do {                                        \
@@ -62,10 +64,12 @@ class JitValidator : CodeBlobClosure {
   MemoryRegionLocator _address_locator;
 
   // Statistics
-  int _address_count[mt_number_of_types];
-  int _unrecognizable_address_count;
+  GrowableArray<address> *_recognizable_address[mt_number_of_types];
+  GrowableArray<address> *_unrecognizable_address;
   int _nmethod_count;
-  enum { OFF, SUMMARY, DETAIL } _log_level;
+  enum { OFF,
+         SUMMARY,
+         DETAIL } _log_level;
 
   JitValidator();
   void do_code_blob(CodeBlob *cb);
@@ -93,6 +97,36 @@ class JitValidator : CodeBlobClosure {
                                           ZyanU64 runtimeAddress);
 
   void handle_value(OperandValue value);
+};
+
+class KlassCounter : StackObj {
+ public:
+  void increase_count(Klass *klass) {
+    for (int i = 0; i < klassCount.length(); i++) {
+      Pair<Klass *, int> &entry = klassCount.at(i);
+      if (entry.first == klass) {
+        entry.second++;
+        return;
+      }
+    }
+    Pair<Klass *, int> entry(klass, 1);
+    klassCount.append(entry);
+  }
+
+  void print_statistics() {
+    klassCount.sort(compare);
+    for (int i = 0; i < klassCount.length(); i++) {
+      const Pair<Klass *, int> &entry = klassCount.at(i);
+      tty->print("%s : %d\n", entry.first->signature_name(), entry.second);
+    }
+  }
+
+ private:
+  GrowableArray<Pair<Klass *, int> > klassCount;
+
+  static int compare(Pair<Klass *, int> *pair1, Pair<Klass *, int> *pair2) {
+    return pair2->second - pair1->second;
+  }
 };
 
 #endif//JDK_JITVALIDATOR_HPP
