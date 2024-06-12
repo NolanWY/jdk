@@ -8,10 +8,11 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/pair.hpp"
+#include "utilities/resourceHash.hpp"
 
 #define JIT_VALIDATOR_DETAIL_LOG(format, ...) \
   do {                                        \
-    if (_log_level == DETAIL) {               \
+    if (logLevel == DETAIL) {                 \
       tty->print(format, ##__VA_ARGS__);      \
     }                                         \
   } while (0)
@@ -52,6 +53,49 @@ class MemoryRegionLocator : public VirtualMemoryWalker {
   MEMFLAGS flag;
 };
 
+class AddressManager : StackObj {
+ public:
+  AddressManager();
+  void add_recognizable_address(address p, nmethod *holder, MEMFLAGS flag);
+  void add_unrecognizable_address(address p, nmethod *holder);
+
+  void print_summary_statistics();
+  void print_heap_address_statistics();
+
+ private:
+  GrowableArray<address> *_recognizable_addresses[mt_number_of_types];
+  GrowableArray<address> *_unrecognizable_addresses;
+  ResourceHashtable<nmethod *, GrowableArray<address> *> *_nmethod_to_addresses;
+  ResourceHashtable<Klass *, GrowableArray<address> *> *_klass_to_heap_addresses;
+  ResourceHashtable<Klass *, GrowableArray<nmethod *> *> *_klass_to_nmethods;
+
+  void add_address_common(address p, nmethod *holder);
+
+  class KlassSorter : StackObj {
+   public:
+    bool do_entry(Klass *const & key, GrowableArray<address> *const & value) {
+      _klassCount.append(Pair<Klass*, int>(key, value->length()));
+      return true;
+    }
+
+    GrowableArray<Klass *> *get_sorted_klass() {
+      _klassCount.sort(compare);
+      GrowableArray<Klass*> *klasses = new GrowableArray<Klass*>(_klassCount.length());
+      for (int i = 0; i < _klassCount.length(); i++) {
+        klasses->append(_klassCount.at(i).first);
+      }
+      return klasses;
+    }
+
+   private:
+    GrowableArray<Pair<Klass*, int> > _klassCount;
+
+    static int compare(Pair<Klass *, int> *pair1, Pair<Klass *, int> *pair2) {
+      return pair2->second - pair1->second;
+    }
+  };
+};
+
 // -XX:NativeMemoryTracking=[summary|detail] should be set when using JitValidator.
 // Log level of JitValidator can be set with -XX:JitValidatorLogLevel=[off|summary|detail]
 class JitValidator : CodeBlobClosure {
@@ -62,14 +106,10 @@ class JitValidator : CodeBlobClosure {
   ZydisDecoder _decoder;
   ZydisFormatter _formatter;
   MemoryRegionLocator _address_locator;
+  AddressManager _address_manager;
 
   // Statistics
-  GrowableArray<address> *_recognizable_address[mt_number_of_types];
-  GrowableArray<address> *_unrecognizable_address;
   int _nmethod_count;
-  enum { OFF,
-         SUMMARY,
-         DETAIL } _log_level;
 
   JitValidator();
   void do_code_blob(CodeBlob *cb);
@@ -82,8 +122,13 @@ class JitValidator : CodeBlobClosure {
   void print_statistics();
 
   struct OperandValue {
-    enum { INVALID = 0, UNSIGNED, SIGNED } type;
-    union { u8 u; s8 s; } value;
+    enum { INVALID = 0,
+           UNSIGNED,
+           SIGNED } type;
+    union {
+      u8 u;
+      s8 s;
+    } value;
   };
 
   OperandValue get_imm_operand(const ZydisDecodedInstruction *instruction,
@@ -96,37 +141,7 @@ class JitValidator : CodeBlobClosure {
                                           const ZydisDecodedOperand *operand,
                                           ZyanU64 runtimeAddress);
 
-  void handle_value(OperandValue value);
-};
-
-class KlassCounter : StackObj {
- public:
-  void increase_count(Klass *klass) {
-    for (int i = 0; i < klassCount.length(); i++) {
-      Pair<Klass *, int> &entry = klassCount.at(i);
-      if (entry.first == klass) {
-        entry.second++;
-        return;
-      }
-    }
-    Pair<Klass *, int> entry(klass, 1);
-    klassCount.append(entry);
-  }
-
-  void print_statistics() {
-    klassCount.sort(compare);
-    for (int i = 0; i < klassCount.length(); i++) {
-      const Pair<Klass *, int> &entry = klassCount.at(i);
-      tty->print("%s : %d\n", entry.first->signature_name(), entry.second);
-    }
-  }
-
- private:
-  GrowableArray<Pair<Klass *, int> > klassCount;
-
-  static int compare(Pair<Klass *, int> *pair1, Pair<Klass *, int> *pair2) {
-    return pair2->second - pair1->second;
-  }
+  void handle_value(OperandValue value, nmethod *holder);
 };
 
 #endif//JDK_JITVALIDATOR_HPP
